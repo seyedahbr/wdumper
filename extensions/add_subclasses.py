@@ -1,4 +1,4 @@
-import os, sys, json, requests, copy
+import os, sys, json, requests, copy, time
 from argparse import ArgumentParser
 from SPARQLWrapper import SPARQLWrapper, JSON
 from typing import Optional, Union, List
@@ -8,6 +8,7 @@ def genargs(prog: Optional[str] = None) -> ArgumentParser:
     parser.add_argument("input", help="Input WDumper specification file")
     parser.add_argument("output", help="Output WDumper specification file, enriched with the subclasses")
     parser.add_argument("-dp" , "--desiredproperty", help="Property that we want to include the subclasses of its values", default='P31')
+    parser.add_argument("-iz" , "--ignorezero", help="Ignore subclasses that have no instances", action='store_true')
     return parser
 
 def getResults(endpoint_url, query):
@@ -42,33 +43,41 @@ def main(argv: Optional[Union[str, List[str]]] = None, prog: Optional[str] = Non
         PREFIX wdt: <http://www.wikidata.org/prop/direct/>
         SELECT ?subtypeQIDs WHERE {{
         ?subtypeQIDs wdt:P279+ {0} .
-    }}
+    }} LIMIT 3
     """
     with open(opts.input) as datafile:
         data = json.load(datafile)
     outData=copy.deepcopy(data)
-    print('getting subclasses from Wikidata...')
+    value_counts=["class,count"]
     for entity in data['entities']:
         if entity['type']=='item':
-            #print('Entity is: ' + str(entity))
             for propert in entity['properties']:
                 if propert['property']==opts.desiredproperty and propert['type']=='entityid':
                     basePad = removeCurrentProperty(entity['properties'], propert)
-                    #print('basePad: ' + str(basePad))
-                    #print('Property ' + opts.desiredproperty + ' was found with the value: ' + str(propert['value']))
                     query=queryTemplate.format('wd:'+propert['value'])
                     print('Getting subclasses from Wikidata endpoint...')
                     results = getResults(wikidataEndpoint, query)
                     print(len(results['results']['bindings']) , 'subclasses was fetched from Wikdiata')
                     for qid in results['results']['bindings']:
                         value=qid['subtypeQIDs']['value'].replace('http://www.wikidata.org/entity/','')
+                        time.sleep(0.2)
+                        counts=getResults(wikidataEndpoint, 'SELECT (COUNT(*) AS ?count) WHERE {{?item wdt:P31 wd:{0}}}'.format(value))
+                        counts=counts['results']['bindings'][0]['count']['value']
+                        value_counts.append(str(str(value) + ',' + str(counts)))
+                        if opts.ignorezero and counts=='0' :                            
+                            print('Subclass: ' + value + ' is not added because it had no instances in Wikidata')
+                            continue
                         print('Adding subclass: ' + value + ' with all the same-level conditions')
                         tempPad={'type':'item','properties':[]}
                         tempPad['properties']+=basePad
                         tempPad['properties'].append({'type': 'entityid','rank': 'all','value': value,'property': opts.desiredproperty})
-                        #print('tempPad: ' + str(tempPad))
                         outData['entities'].append(tempPad)
-                        #print('outData: ' + str(outData['entities']))
+    if opts.ignorezero :
+        value_counts_file=opts.input+'-instanceCounts.csv'
+        with open(value_counts_file, 'w') as classCounts:
+            for item in value_counts:
+                classCounts.write("%s\n" % item)
+    
     print('Writing to the new config file...')
     with open(opts.output, 'w') as outfile:
         json.dump(outData, outfile, indent=3)
