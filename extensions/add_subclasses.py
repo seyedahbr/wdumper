@@ -43,7 +43,7 @@ def main(argv: Optional[Union[str, List[str]]] = None, prog: Optional[str] = Non
         PREFIX wdt: <http://www.wikidata.org/prop/direct/>
         SELECT ?subtypeQIDs WHERE {{
         ?subtypeQIDs wdt:P279+ {0} .
-    }} LIMIT 3
+    }}
     """
     with open(opts.input) as datafile:
         data = json.load(datafile)
