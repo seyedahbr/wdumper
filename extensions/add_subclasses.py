@@ -18,6 +18,15 @@ def getResults(endpoint_url, query):
     sparql.setReturnFormat(JSON)
     return sparql.query().convert()
 
+def getResultsReq(endpoint_url, query):
+    while True:
+        response = requests.get(endpoint_url, headers = {'User-agent': 'your bot 0.1'}, params = {'format': 'json', 'query': query})
+        if response.status_code == 429:
+            print('Process should wait for {0}'.format(str(response.headers)))
+            time.sleep(int(response.headers["Retry-After"]))
+        elif response.status_code == 200:
+            return response.json()
+
 def removeCurrentProperty(prop_array:List, propert: object) -> List:
     for i in range(len(prop_array)):
         if prop_array[i]['property'] == propert['property'] and prop_array[i]['value'] == propert['value']:
@@ -43,42 +52,56 @@ def main(argv: Optional[Union[str, List[str]]] = None, prog: Optional[str] = Non
         PREFIX wdt: <http://www.wikidata.org/prop/direct/>
         SELECT ?subtypeQIDs WHERE {{
         ?subtypeQIDs wdt:P279+ {0} .
-    }} LIMIT 3
+    }}
+    """
+    queryTemplateIz = """
+        PREFIX wd: <http://www.wikidata.org/entity/>
+        PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+        SELECT DISTINCT ?subtypeQIDs WHERE {{
+        ?subtypeQIDs wdt:P279+ {0} .
+        ?anotherItem wdt:P31 ?subtypeQIDs.
+    }}
     """
     with open(opts.input) as datafile:
         data = json.load(datafile)
     outData=copy.deepcopy(data)
-    value_counts=["class,count"]
+    #value_counts=["class,count"]
+    added_subclasses=0 
     for entity in data['entities']:
         if entity['type']=='item':
             for propert in entity['properties']:
                 if propert['property']==opts.desiredproperty and propert['type']=='entityid':
                     basePad = removeCurrentProperty(entity['properties'], propert)
-                    query=queryTemplate.format('wd:'+propert['value'])
+                    if opts.ignorezero:
+                        query=queryTemplateIz.format('wd:'+propert['value'])
+                    else:
+                        query=queryTemplate.format('wd:'+propert['value'])
                     print('Getting subclasses from Wikidata endpoint...')
-                    results = getResults(wikidataEndpoint, query)
-                    print(len(results['results']['bindings']) , 'subclasses was fetched from Wikdiata')
+                    results = getResultsReq(wikidataEndpoint, query)                    
+                    print(len(results['results']['bindings']) , 'subclasses was fetched from Wikdiata')                    
                     for qid in results['results']['bindings']:
                         value=qid['subtypeQIDs']['value'].replace('http://www.wikidata.org/entity/','')
-                        time.sleep(0.2)
-                        counts=getResults(wikidataEndpoint, 'SELECT (COUNT(*) AS ?count) WHERE {{?item wdt:P31 wd:{0}}}'.format(value))
-                        counts=counts['results']['bindings'][0]['count']['value']
-                        value_counts.append(str(str(value) + ',' + str(counts)))
-                        if opts.ignorezero and counts=='0' :                            
-                            print('Subclass: ' + value + ' is not added because it had no instances in Wikidata')
-                            continue
+                        #time.sleep(0.2)                        
+                        # if opts.ignorezero:
+                        #     counts=getResultsReq(wikidataEndpoint, 'SELECT (COUNT(*) AS ?count) WHERE {{?item wdt:P31 wd:{0}}}'.format(value))
+                        #     counts=counts['results']['bindings'][0]['count']['value']
+                        #     value_counts.append(str(str(value) + ',' + str(counts))) 
+                        #     if counts=='0' :                            
+                        #         print('Subclass: ' + value + ' is not added because it had no instances in Wikidata')
+                        #         continue
                         print('Adding subclass: ' + value + ' with all the same-level conditions')
+                        added_subclasses += 1
                         tempPad={'type':'item','properties':[]}
                         tempPad['properties']+=basePad
                         tempPad['properties'].append({'type': 'entityid','rank': 'all','value': value,'property': opts.desiredproperty})
                         outData['entities'].append(tempPad)
-    if opts.ignorezero :
-        value_counts_file=opts.input+'-instanceCounts.csv'
-        with open(value_counts_file, 'w') as classCounts:
-            for item in value_counts:
-                classCounts.write("%s\n" % item)
+    # if opts.ignorezero :
+    #     value_counts_file=opts.input+'-instanceCounts.csv'
+    #     with open(value_counts_file, 'w') as classCounts:
+    #         for item in value_counts:
+    #             classCounts.write("%s\n" % item)
     
-    print('Writing to the new config file...')
+    print('Writing new {0} subclasses to the new config file...'.format(added_subclasses))
     with open(opts.output, 'w') as outfile:
         json.dump(outData, outfile, indent=3)
     print('done.')
