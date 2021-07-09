@@ -59,7 +59,7 @@ def main(argv: Optional[Union[str, List[str]]] = None, prog: Optional[str] = Non
         PREFIX wdt: <http://www.wikidata.org/prop/direct/>
         SELECT DISTINCT ?subtypeQIDs WHERE {{
         ?subtypeQIDs wdt:P279+ {0} .
-        ?anotherItem wdt:P31 ?subtypeQIDs.
+        ?anotherItem wdt:{1} ?subtypeQIDs.
     }}
     """
     with open(opts.input) as datafile:
@@ -73,7 +73,7 @@ def main(argv: Optional[Union[str, List[str]]] = None, prog: Optional[str] = Non
                 if propert['property']==opts.desiredproperty and propert['type']=='entityid':
                     basePad = removeCurrentProperty(entity['properties'], propert)
                     if opts.ignorezero:
-                        query=queryTemplateIz.format('wd:'+propert['value'])
+                        query=queryTemplateIz.format('wd:'+propert['value'],opts.desiredproperty)
                     else:
                         query=queryTemplate.format('wd:'+propert['value'])
                     print('Getting subclasses from Wikidata endpoint...')
