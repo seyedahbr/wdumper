@@ -34,13 +34,13 @@ spec_templates = {
         "simple": true,
         "rank": "all",
         "full": true,
-        "qualifiers": false
+        "qualifiers": true
         }
     ],
     "sitelinks": true,
     "descriptions": false,
-    "aliases": false,
-    "meta": false,
+    "aliases": true,
+    "meta": true,
     "labels": false
     }
     '''
