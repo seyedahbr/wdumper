@@ -65,7 +65,7 @@ def main(argv: Optional[Union[str, List[str]]] = None, prog: Optional[str] = Non
     random_ids = random.sample(range(1,110272953), opts.number)
     
     for id in random_ids:
-        new_entity_val = {'type': 'entityid','rank': 'all','value': 'Q'+str(id),'property': ''}
+        new_entity_val = {"type": "item","properties": [{'type': 'entityid','rank': 'all','value': 'Q'+str(id),'property': ''}]}
         spec['entities'].append(new_entity_val)
     
     print('Writing {0} random QIDs to the config file: {1}'.format(opts.number,opts.output))
