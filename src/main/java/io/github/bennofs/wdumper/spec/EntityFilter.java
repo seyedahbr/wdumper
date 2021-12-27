@@ -24,8 +24,9 @@ public class EntityFilter {
 
     boolean matches(StatementDocument doc) {
         if (!this.type.matches(doc.getEntityId())) return false;
-
         for (ValueFilter filter : this.properties) {
+	    if(filter.getProperty().equals("") && filter.getValue().equals(doc.getEntityId().getId())) 
+                return true;
             StatementGroup sg = doc.findStatementGroup(filter.getProperty());
 
             if (!filter.matches(sg)) return false;

@@ -110,4 +110,7 @@ public class ValueFilter implements SnakVisitor<Boolean> {
     public String getProperty() {
         return property;
     }
+    public String getValue() {
+    	return this.value;
+    }
 }
